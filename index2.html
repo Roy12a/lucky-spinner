@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validated Lucky Spinner</title>
+    <style>
+        :root {
+            --primary: #e74c3c;
+            --secondary: #27ae60;
+            --bg: #f4f7f6;
+            --dark: #2c3e50;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 450px; text-align: center; border: 1px solid #ddd; }
+
+        /* Animation */
+        .fade-out { opacity: 0; transform: translateY(-20px); transition: 0.6s ease; pointer-events: none; display: none !important; }
+        .fade-in { animation: fadeIn 0.8s forwards; display: flex !important; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Spinner Box */
+        .wheel-box { position: relative; width: 300px; margin: 0 auto; display: none; flex-direction: column; align-items: center; }
+        .wheel-wrapper { position: relative; width: 280px; height: 280px; margin-bottom: 25px; }
+        
+        canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #333; transition: transform 5.5s cubic-bezier(0.15, 0, 0.15, 1); }
+        
+        .pointer { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 0; height: 0; 
+                    border-left: 18px solid transparent; border-right: 18px solid transparent; 
+                    border-top: 35px solid var(--primary); z-index: 50; }
+
+        /* Form */
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #eee; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        input:focus { border-color: var(--secondary); outline: none; }
+        .error-msg { color: var(--primary); font-size: 12px; display: none; margin-bottom: 10px; }
+
+        .btn { background: var(--secondary); color: white; border: none; padding: 15px 30px; border-radius: 50px; cursor: pointer; font-size: 18px; font-weight: bold; width: 100%; transition: 0.3s; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        /* History */
+        .history-section { width: 100%; max-width: 600px; margin-top: 40px; background: white; padding: 20px; border-radius: 15px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #f0f0f0; text-align: center; font-size: 14px; }
+        th { background: var(--dark); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="formSection">
+        <h2 style="color: var(--dark);">🎁 Shop Discount</h2>
+        <input type="text" id="uName" placeholder="Customer Name">
+        
+        <input type="number" id="uPhone" placeholder="10 Digit Mobile Number" 
+               oninput="if(this.value.length > 10) this.value = this.value.slice(0, 10);">
+        <p id="phoneError" class="error-msg">Prothome 10 digit-er sothik number din!</p>
+        
+        <input type="number" id="uPrice" placeholder="Product Price (₹)">
+        <button class="btn" onclick="validateAndStart()">Unlock Luck!</button>
+    </div>
+
+    <div id="w1-box" class="wheel-box">
+        <h3>Primary Spin</h3>
+        <div class="wheel-wrapper"><div class="pointer"></div><canvas id="canvas1" width="300" height="300"></canvas></div>
+        <button id="spinBtn1" class="btn" onclick="runSpin(1)">SPIN NOW</button>
+    </div>
+
+    <div id="w2-box" class="wheel-box">
+        <h3 style="color:var(--primary)">🔥 Bonus Wheel</h3>
+        <div class="wheel-wrapper"><div class="pointer"></div><canvas id="canvas2" width="300" height="300"></canvas></div>
+        <button id="spinBtn2" class="btn" onclick="runSpin(2)">SPIN BONUS</button>
+    </div>
+
+    <div id="result-card" style="display:none; padding:20px; background:#ebf9f1; border:2px solid var(--secondary); border-radius:15px; margin-top:20px;"></div>
+</div>
+
+<div class="history-section">
+    <h3 style="color: var(--dark);">🕒 Transaction History</h3>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Mobile</th><th>Before</th><th>Final</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+    </table>
+</div>
+
+<script>
+    let state = { name: '', phone: '', price: 0, d1: 0, d2: 0 };
+    
+    const opt1 = ["Flat 15% Off", "10%+5% Off", "Cashback 10%", "Try Again"];
+    const colors1 = ["#f1c40f", "#e67e22", "#f39c12", "#95a5a6"];
+
+    const opt2 = ["Try Again", "Extra 10%", "Try Again", "Extra 5%", "Try Again", "Extra 2%"];
+    const colors2 = ["#bdc3c7", "#e74c3c", "#bdc3c7", "#3498db", "#bdc3c7", "#2ecc71"];
+
+    function draw(id, options, colors) {
+        const canvas = document.getElementById(id);
+        const ctx = canvas.getContext('2d');
+        const arc = (2 * Math.PI) / options.length;
+        ctx.clearRect(0,0,300,300);
+        options.forEach((txt, i) => {
+            ctx.beginPath(); ctx.fillStyle = colors[i]; ctx.moveTo(150, 150);
+            ctx.arc(150, 150, 145, i * arc, (i + 1) * arc); ctx.fill();
+            ctx.save(); ctx.translate(150, 150); ctx.rotate(i * arc + arc/2);
+            ctx.fillStyle = "white"; ctx.font = "bold 13px Arial"; ctx.textAlign = "right";
+            ctx.fillText(txt, 130, 5); ctx.restore();
+        });
+    }
+
+    function validateAndStart() {
+        const name = document.getElementById('uName').value;
+        const phone = document.getElementById('uPhone').value;
+        const price = document.getElementById('uPrice').value;
+        const error = document.getElementById('phoneError');
+
+        // Validation Logic
+        if(!name || phone.length !== 10 || isNaN(price) || price <= 0) {
+            error.style.display = 'block';
+            return;
+        }
+
+        error.style.display = 'none';
+        state.name = name;
+        state.phone = phone;
+        state.price = parseFloat(price);
+
+        document.getElementById('formSection').classList.add('fade-out');
+        setTimeout(() => {
+            document.getElementById('w1-box').classList.add('fade-in');
+            draw('canvas1', opt1, colors1);
+        }, 600);
+    }
+
+    function runSpin(num) {
+        const btn = document.getElementById('spinBtn' + num);
+        const canvas = document.getElementById('canvas' + num);
+        btn.disabled = true;
+        let selectedIdx;
+        const totalRounds = 360 * 10;
+
+        if(num === 1) {
+            let rnd = Math.random() * 100;
+            if(rnd < 50) selectedIdx = 1; // 10+5%
+            else if(rnd < 75) selectedIdx = 0; // 15%
+            else if(rnd < 95) selectedIdx = 2; // 10%
+            else selectedIdx = 3; // Try Again
+
+            const targetDeg = totalRounds + (opt1.length - selectedIdx) * (360/opt1.length) - (360/opt1.length/2);
+            canvas.style.transform = `rotate(${targetDeg}deg)`;
+
+            setTimeout(() => {
+                const prize = opt1[selectedIdx];
+                if(prize.includes("15%")) state.d1 = 0.15;
+                else if(prize.includes("10%+5%")) state.d1 = "successive";
+                else if(prize.includes("10%")) state.d1 = 0.10;
+
+                document.getElementById('w1-box').classList.remove('fade-in');
+                document.getElementById('w1-box').classList.add('fade-out');
+                
+                setTimeout(() => {
+                    if(state.price >= 400) {
+                        document.getElementById('w2-box').classList.add('fade-in');
+                        draw('canvas2', opt2, colors2);
+                    } else { finalize(); }
+                }, 600);
+            }, 5800);
+        } else {
+            let rnd = Math.random() * 100;
+            if(rnd < 15) selectedIdx = 1; // 10%
+            else if(rnd < 40) selectedIdx = 3; // 5%
+            else if(rnd < 70) selectedIdx = 5; // 2%
+            else selectedIdx = Math.random() > 0.5 ? 0 : 2; // Try Again
+
+            const targetDeg = totalRounds + (opt2.length - selectedIdx) * (360/opt2.length) - (360/opt2.length/2);
+            canvas.style.transform = `rotate(${targetDeg}deg)`;
+
+            setTimeout(() => {
+                const prize = opt2[selectedIdx];
+                if(prize.includes("10%")) state.d2 = 0.10;
+                else if(prize.includes("5%")) state.d2 = 0.05;
+                else if(prize.includes("2%")) state.d2 = 0.02;
+                document.getElementById('w2-box').classList.add('fade-out');
+                setTimeout(finalize, 600);
+            }, 5800);
+        }
+    }
+
+    function finalize() {
+        let final = state.price;
+        if(state.d1 === "successive") final = final * 0.90 * 0.95;
+        else final = final * (1 - state.d1);
+        final = final * (1 - state.d2);
+
+        const finalPrice = final.toFixed(2);
+        const resDiv = document.getElementById('result-card');
+        resDiv.style.display = 'block';
+        resDiv.innerHTML = `<h2>Result: ₹${finalPrice}</h2><button class="btn" onclick="location.reload()">Next</button>`;
+        
+        let history = JSON.parse(localStorage.getItem('spinHistory')) || [];
+        history.unshift({ n: state.name, p: "XXXXXX" + state.phone.slice(-4), op: state.price, np: finalPrice });
+        if(history.length > 10) history.pop();
+        localStorage.setItem('spinHistory', JSON.stringify(history));
+        renderTable();
+    }
+
+    function renderTable() {
+        const history = JSON.parse(localStorage.getItem('spinHistory')) || [];
+        document.getElementById('historyBody').innerHTML = history.map(i => `
+            <tr><td>${i.n}</td><td>${i.p}</td><td>₹${i.op}</td><td style="color:green;font-weight:bold">₹${i.np}</td></tr>
+        `).join('');
+    }
+
+    // Master Clear (F12 console: clearData())
+    window.clearData = function() {
+        if(prompt("Admin Password:") === "1234") { localStorage.removeItem('spinHistory'); renderTable(); }
+    }
+
+    renderTable();
+</script>
+</body>
+</html>
